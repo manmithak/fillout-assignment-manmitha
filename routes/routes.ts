@@ -4,7 +4,7 @@ import { ZodError } from 'zod';
 
 const router = express.Router();
 
-router.get('/:formId/filteredResponses', async (req: Request, res: Response) => {
+router.get('/v1/api/forms/:formId/filteredResponses', async (req: Request, res: Response) => {
     try {
         const submissions = await getSubmissions(req, res);
         res.status(200).json(submissions);

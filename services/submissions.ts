@@ -7,13 +7,12 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const questionTypes = ['Address', 'AudioRecording', 'Calcom', 'Calendly', 'Captcha', 'Checkbox', 'Checkboxes', 'ColorPicker', 'CurrencyInput', 'DatePicker', 'DateRange', 'DateTimePicker', 'Dropdown', 'EmailInput', 'FileUpload', 'ImagePicker', 'LocationCoordinates', 'LongAnswer', 'Matrix', 'MultiSelect', 'MultipleChoice', 'NumberInput', 'OpinionScale', 'Password', 'Payment', 'PhoneNumber', 'Ranking', 'RecordPicker', 'ShortAnswer', 'Signature', 'Slider', 'StarRating', 'Switch', 'TimePicker', 'URLInput']
-const calcTypes = ['number', 'text']
+
 export async function getSubmissions(req: Request, res: Response): Promise<FilteredResponse> {
     try{
         // parse input request params and query params using zod objects
         const filterParams = FilterRequestParamsSchema.parse(req.params) as FilterRequestParamsType
         const filterQueryParams = FilterRequestQuerySchema.parse(req.query) as FilterRequestQueryType
-        console.log(filterQueryParams)
 
         const parsedValue = JSON.parse(filterQueryParams.filters);
         const filterClauseResponse = RequestFiltersSchema.parse(parsedValue);
@@ -43,8 +42,11 @@ export async function getSubmissions(req: Request, res: Response): Promise<Filte
         })
         const filloutApiResponse = apiResponse.data as FilteredResponse
 
+        // calling filterResponses functionality to filter the fillout submissions response
         const filterResponse = filterResponses(filloutApiResponse.responses, filterClauseResponse)
         const totalResponses = filterResponse.length
+
+        //constructing the filter response with the same response schema as fillout's
         return {responses: filterResponse, totalResponses: totalResponses, pageCount: Math.ceil(totalResponses / 150)} as FilteredResponse
 
     } catch (error){
@@ -56,29 +58,39 @@ function isValidDate(dateStr: string, format: string = 'YYYY-MM-DD'): boolean {
     return dayjs(dateStr, format).isValid();
 }
 
+function isNumber(value: string): boolean {
+    return /^\d+(\.\d+)?$/.test(value);
+}
+
+function isWordOrSentence(value: string): boolean {
+    return /[a-zA-Z]/.test(value);
+}
+
 
 function filterResponses(responses: Responses[], filters: RequestFiltersType): Responses[] {
+    // filtering responses whoch satisfy the filter condions on questions array
     return responses.filter(response => {
         return filters.every(filter => {
             const question = response.questions.find(q => q.id === filter.id);
             if (!question) return false;
-            console.log(question)
-            console.log(isValidDate(question.value), 'is valid ----------------------------------->')
-            if (questionTypes.includes(question.type) && !isValidDate(question.value)) {
-                if (filter.condition === 'equals') {
-                    return question.value === filter.value;
-                } else if (filter.condition === 'does_not_equal') {
-                    return question.value !== filter.value;
-                } 
-            } else if (calcTypes.includes(question.type) || isValidDate(question.value)) {
-                if (filter.condition === 'equals') {
-                    return question.value === filter.value;
-                } else if (filter.condition === 'does_not_equal') {
-                    return question.value !== filter.value;
-                } else if (filter.condition === 'greater_than') {
-                    return question.value > filter.value;
-                } else if (filter.condition === 'less_than') {
-                    return question.value < filter.value;
+
+            if (questionTypes.includes(question.type)){ 
+                if (!isValidDate(question.value) && isWordOrSentence(question.value)) {
+                    if (filter.condition === 'equals') {
+                        return question.value === filter.value;
+                    } else if (filter.condition === 'does_not_equal') {
+                        return question.value !== filter.value;
+                    } 
+                } else if (isValidDate(question.value) || isNumber(question.value)) {
+                    if (filter.condition === 'equals') {
+                        return question.value === filter.value;
+                    } else if (filter.condition === 'does_not_equal') {
+                        return question.value !== filter.value;
+                    } else if (filter.condition === 'greater_than') {
+                        return question.value > filter.value;
+                    } else if (filter.condition === 'less_than') {
+                        return question.value < filter.value;
+                    }
                 }
             }
             return false

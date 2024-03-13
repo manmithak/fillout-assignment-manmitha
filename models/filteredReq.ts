@@ -5,7 +5,7 @@ export const FilterRequestParamsSchema = z.object({
     formId: z.string(),   
 });
 
-// input query params schema and some validation
+// input query params schema and some validation for the input data
 export const FilterRequestQuerySchema = z.object({
     limit: z.number().default(150).optional(),
     afterDate: z.string().optional(),
@@ -16,9 +16,31 @@ export const FilterRequestQuerySchema = z.object({
     sort: z.string().default('asc').optional(),
     filters: z.string()
 }).refine(data => {
+    const { afterDate, beforeDate, limit, includeEditLink, status, sort } = data;
     const issues = [];
-       
-    if (data.limit !== undefined && (data.limit > 1 || data.limit <= 150)) {
+    const regex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/;
+
+    if (afterDate !== undefined && regex.test(afterDate)) {
+        const invalidDateIssue = {
+            code: ZodIssueCode.invalid_date,
+            message: "afterDate must be in the format YYYY-MM-DDTHH:mm:ss.sssZ",
+            expected: [],
+            received: afterDate,
+            path: ['afterDate'],
+        };
+        issues.push(invalidDateIssue)
+    }
+    if (beforeDate !== undefined && regex.test(beforeDate)) {
+        const invalidDateIssue = {
+            code: ZodIssueCode.invalid_date,
+            message: "beforeDate must be in the format YYYY-MM-DDTHH:mm:ss.sssZ",
+            expected: [],
+            received: beforeDate,
+            path: ['beforeDate'],
+        };
+        issues.push(invalidDateIssue)
+    }
+    if (limit !== undefined && (limit > 1 || limit <= 150)) {
         const customIssue = {
             code: ZodIssueCode.custom,
             message: "Limit must be a number between, including 1 and 150",
@@ -26,20 +48,32 @@ export const FilterRequestQuerySchema = z.object({
         };
         issues.push(customIssue)
     }
-    if (data.status !== undefined && data.status !== 'in_progress') {
-        const customIssue = {
-            code: ZodIssueCode.custom,
-            message: "Status must be a string with value 'in_progress'",
+    if (status !== undefined && status !== 'in_progress') {
+        const invalidLiteralIssue = {
+            code: ZodIssueCode.invalid_literal,
+            message: "sort must be 'in_progress'",
+            expected: ['in_progress'],
+            received: status,
             path: ['status'],
         };
-        issues.push(customIssue)
+        issues.push(invalidLiteralIssue)
     }
-    if (data.includeEditLink !== undefined && !['true', 'false'].includes(data.includeEditLink)) {
+    if (sort !== undefined && !['asc', 'dsc'].includes(sort)) {
+        const invalidLiteralIssue = {
+            code: ZodIssueCode.invalid_literal,
+            message: "sort must be 'asc' or 'dsc'",
+            expected: ['asc', 'dsc'],
+            received: data.sort,
+            path: ['sort'],
+        };
+        issues.push(invalidLiteralIssue)
+    }
+    if (includeEditLink !== undefined && !['true', 'false'].includes(includeEditLink)) {
         const invalidLiteralIssue = {
             code: ZodIssueCode.invalid_literal,
             message: "IncludeEditLink must be 'true' or 'false'",
             expected: ['true', 'false'],
-            received: data.includeEditLink,
+            received: includeEditLink,
             path: ['includeEditLink'],
         };
         issues.push(invalidLiteralIssue)
@@ -50,11 +84,29 @@ export const FilterRequestQuerySchema = z.object({
     return true;
 });
 
-// input query parm filter json array's schema
+// input query param filter json array's schema and its validation
+
+const conditionFilters = ['equals', 'does_not_equal', 'greater_than', 'less_than'];
+
 const FilterClauseSchema = z.object({
     id: z.string(),
     condition: z.enum(['equals', 'does_not_equal', 'greater_than', 'less_than']),
     value: z.union([z.string(), z.number()]),
+}).refine((data) => {
+    const { condition } = data;
+
+    if ( !conditionFilters.includes(condition)) {
+        const invalidLiteralIssue = {
+            code: ZodIssueCode.invalid_literal,
+            message: "IncludeEditLink must be 'equals' or 'does_not_equal' or 'greater_than' or 'less_than'",
+            expected: conditionFilters,
+            received: condition,
+            path: ['filters.condition'],
+        };
+        throw new ZodError([invalidLiteralIssue])
+    }
+
+    return true; // Refinement passed
 });
   
 export const RequestFiltersSchema = z.array(FilterClauseSchema);
